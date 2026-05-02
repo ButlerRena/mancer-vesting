@@ -1,0 +1,58 @@
+use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{Mint, Token, TokenAccount};
+
+use crate::state::VestingTree;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct CreateCampaignArgs {
+    pub campaign_id: u64,
+    pub merkle_root: [u8; 32],
+    pub leaf_count: u32,
+    pub total_supply: u64,
+    pub cancellable: bool,
+    pub cancel_authority: Option<Pubkey>,
+    pub pause_authority: Option<Pubkey>,
+}
+
+#[derive(Accounts)]
+#[instruction(args: CreateCampaignArgs)]
+pub struct CreateCampaign<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + VestingTree::INIT_SPACE,
+        seeds = [b"tree",
+            creator.key().as_ref(),
+            mint.key().as_ref(),
+            &args.campaign_id.to_le_bytes()],
+        bump,
+    )]
+    pub vesting_tree: Account<'info, VestingTree>,
+
+    /// CHECK: PDA only used as signer; never deserialised.
+    #[account(seeds = [b"vault_authority", vesting_tree.key().as_ref()], bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+
+    #[account(
+        init,
+        payer = creator,
+        associated_token::mint = mint,
+        associated_token::authority = vault_authority,
+    )]
+    pub vault: Account<'info, TokenAccount>,
+
+    pub mint: Account<'info, Mint>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn handler(_ctx: Context<CreateCampaign>, _args: CreateCampaignArgs) -> Result<()> {
+    Ok(())
+}

@@ -1,0 +1,11 @@
+target/
+node_modules/
+.anchor/
+test-ledger/
+.DS_Store
+*.log
+.env
+.env.local
+target/idl/
+target/types/
+target/deploy/vesting.so
