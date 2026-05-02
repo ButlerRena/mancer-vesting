@@ -11,6 +11,8 @@ pub enum VestingError {
     ZeroAmount,
     #[msg("Cancellable campaigns require a cancel_authority")]
     MissingCancelAuthority,
+    #[msg("New root must differ from the current root")]
+    SameRoot,
 
     // fund_campaign / withdraw_unvested
     #[msg("Caller is not authorised for this action")]

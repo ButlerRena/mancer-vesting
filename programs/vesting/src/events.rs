@@ -36,6 +36,14 @@ pub struct CampaignCancelled {
 }
 
 #[event]
+pub struct RootUpdated {
+    pub tree: Pubkey,
+    pub old_root: [u8; 32],
+    pub new_root: [u8; 32],
+    pub new_leaf_count: u32,
+}
+
+#[event]
 pub struct UnvestedWithdrawn {
     pub tree: Pubkey,
     pub amount: u64,

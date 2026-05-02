@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
+use crate::errors::VestingError;
+use crate::events::CampaignCreated;
 use crate::state::VestingTree;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -53,6 +55,39 @@ pub struct CreateCampaign<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler(_ctx: Context<CreateCampaign>, _args: CreateCampaignArgs) -> Result<()> {
+pub fn handler(ctx: Context<CreateCampaign>, args: CreateCampaignArgs) -> Result<()> {
+    require!(args.merkle_root != [0u8; 32], VestingError::EmptyRoot);
+    require!(args.leaf_count  > 0,           VestingError::EmptyCampaign);
+    require!(args.total_supply > 0,          VestingError::ZeroAmount);
+    if args.cancellable {
+        require!(args.cancel_authority.is_some(), VestingError::MissingCancelAuthority);
+    }
+
+    let tree = &mut ctx.accounts.vesting_tree;
+    tree.creator          = ctx.accounts.creator.key();
+    tree.mint             = ctx.accounts.mint.key();
+    tree.vault            = ctx.accounts.vault.key();
+    tree.vault_authority  = ctx.accounts.vault_authority.key();
+    tree.campaign_id      = args.campaign_id;
+    tree.merkle_root      = args.merkle_root;
+    tree.leaf_count       = args.leaf_count;
+    tree.total_supply     = args.total_supply;
+    tree.total_claimed    = 0;
+    tree.cancellable      = args.cancellable;
+    tree.cancel_authority = args.cancel_authority;
+    tree.cancelled_at     = None;
+    tree.paused           = false;
+    tree.pause_authority  = args.pause_authority;
+    tree.created_at       = Clock::get()?.unix_timestamp;
+    tree.bump             = ctx.bumps.vesting_tree;
+
+    emit!(CampaignCreated {
+        tree:         tree.key(),
+        creator:      tree.creator,
+        mint:         tree.mint,
+        total_supply: tree.total_supply,
+        leaf_count:   tree.leaf_count,
+        cancellable:  tree.cancellable,
+    });
     Ok(())
 }

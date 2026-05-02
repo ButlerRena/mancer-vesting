@@ -39,6 +39,14 @@ pub mod vesting {
         instructions::cancel_campaign::handler(ctx)
     }
 
+    pub fn update_root(
+        ctx: Context<UpdateRoot>,
+        new_root: [u8; 32],
+        new_leaf_count: u32,
+    ) -> Result<()> {
+        instructions::update_root::handler(ctx, new_root, new_leaf_count)
+    }
+
     pub fn withdraw_unvested(ctx: Context<WithdrawUnvested>) -> Result<()> {
         instructions::withdraw_unvested::handler(ctx)
     }

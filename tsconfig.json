@@ -1,11 +1,16 @@
 {
   "compilerOptions": {
-    "types": ["mocha", "chai"],
-    "typeRoots": ["./node_modules/@types"],
-    "lib": ["es2015"],
-    "module": "commonjs",
-    "target": "es6",
-    "esModuleInterop": true,
-    "resolveJsonModule": true
-  }
+    "types":             ["mocha", "chai", "node"],
+    "typeRoots":         ["./node_modules/@types"],
+    "lib":               ["es2020"],
+    "module":            "commonjs",
+    "target":            "es2020",
+    "esModuleInterop":   true,
+    "resolveJsonModule": true,
+    "strict":            true,
+    "skipLibCheck":      true,
+    "declaration":       true,
+    "outDir":            "dist"
+  },
+  "include": ["clients/ts/**/*.ts", "tests/**/*.ts"]
 }

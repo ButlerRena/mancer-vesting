@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::GRACE_PERIOD_SECS;
 use crate::errors::VestingError;
+use crate::events::ClaimRecordClosed;
 use crate::state::{ClaimRecord, VestingTree};
 
 #[derive(Accounts)]
@@ -21,6 +23,21 @@ pub struct CloseClaimRecord<'info> {
     pub claim_record: Account<'info, ClaimRecord>,
 }
 
-pub fn handler(_ctx: Context<CloseClaimRecord>, _expected_total: u64) -> Result<()> {
+pub fn handler(ctx: Context<CloseClaimRecord>, expected_total: u64) -> Result<()> {
+    let cr   = &ctx.accounts.claim_record;
+    let tree = &ctx.accounts.vesting_tree;
+    let now  = Clock::get()?.unix_timestamp;
+
+    let fully_claimed = cr.claimed_amount >= expected_total;
+    let post_grace = match tree.cancelled_at {
+        Some(c) => now >= c + GRACE_PERIOD_SECS,
+        None    => false,
+    };
+    require!(fully_claimed || post_grace, VestingError::CannotClose);
+
+    emit!(ClaimRecordClosed {
+        tree:        tree.key(),
+        beneficiary: ctx.accounts.beneficiary.key(),
+    });
     Ok(())
 }
