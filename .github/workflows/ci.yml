@@ -7,6 +7,10 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_TERM_COLOR: always
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,12 +20,16 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Solana CLI
+      - name: Install Solana CLI + SBF toolchain
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          # Pre-fetch platform-tools (SBF toolchain) so cargo-build-sbf works
-          "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc" --version || true
+          # cargo-build-sbf needs platform-tools — download it explicitly
+          mkdir -p "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
+          PLATFORM_TOOLS_URL="https://github.com/anza-xyz/platform-tools/releases/latest/download/platform-tools-linux-x86_64.tar.bz2"
+          curl -L "$PLATFORM_TOOLS_URL" | tar xj -C "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
+          # Verify
+          "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc" --version
 
       - name: Install Anchor CLI
         run: |
@@ -32,7 +40,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install JS deps
         run: yarn install --frozen-lockfile || npm install
