@@ -5,9 +5,18 @@ Merkle root on-chain stands in for an entire recipient list, so a campaign
 of 10,000 recipients costs a project ~$0.42 instead of ~$1,990 on
 per-recipient-PDA designs.
 
-This repo is the Week 3 scaffold: the Anchor program builds, instruction
-handlers are stubs, account structs and errors are final. Logic lands in
-Week 4.
+## Program Address
+
+`BKauLFNrGhWpaiHkWP3XrDGq5ZfMMNeTdmbtNbHydxAX`
+
+### Features
+
+- Merkle-compressed recipient lists (keccak256)
+- Customizable vesting schedules (cliff, linear, milestone)
+- Per-recipient clawback via Merkle root rotation
+- Campaign-wide cancel with 7-day grace period
+- Pause/unpause support
+- TS Merkle tooling (`clients/ts/`)
 
 ## Prerequisites
 
@@ -79,8 +88,7 @@ tests/                # ts integration tests
 .github/workflows/    # CI (anchor build + anchor test)
 ```
 
-## What's implemented in Week 3
+## What's implemented
 
-Scaffolding only — instruction handlers are empty stubs. Account
-structures, error variants, events, and constants are final. Logic
-lands in Week 4.
+All 10 instructions with full logic, integration tests (8/8 passing),
+and TS Merkle client tooling.
