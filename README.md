@@ -9,13 +9,75 @@ per-recipient-PDA designs.
 
 `BKauLFNrGhWpaiHkWP3XrDGq5ZfMMNeTdmbtNbHydxAX`
 
-## Features
+[View on Solana Explorer →](https://explorer.solana.com/address/BKauLFNrGhWpaiHkWP3XrDGq5ZfMMNeTdmbtNbHydxAX?cluster=devnet)
+
+## Code Repository
+
+[github.com/ButlerRena/mancer-vesting](https://github.com/ButlerRena/mancer-vesting)
+
+---
+
+## Why Mancer Vesting?
+
+### 1. Automation
+
+Configure once, forget. Projects set up a vesting campaign with a single
+transaction — define the schedule, deposit tokens, and upload a Merkle root.
+From there, recipients independently claim their tokens at any time. The
+protocol enforces all rules automatically: schedule logic, proof verification,
+pause states, and clawback conditions. No manual intervention needed.
+
+### 2. Tracking & Transparency
+
+Every state change is recorded on-chain and publicly verifiable. All 8 event
+types are emitted in real-time, and campaign state is fully readable by anyone.
+Recipients can monitor their vesting progress without relying on the project
+team. Use `get_vested_amount` to check how much is available at any moment, or
+query the `VestingTree` account for full campaign details.
+
+**On-chain events emitted:**
+- `CampaignCreated` — authority, schedule, start/end times
+- `CampaignFunded` — token amount deposited
+- `TokensClaimed` — recipient address, amount claimed
+- `RootUpdated` — new Merkle root (clawback signal)
+- `CampaignPaused` / `CampaignUnpaused`
+- `CampaignCancelled` — with grace period deadline
+- `UnvestedWithdrawn` — amount returned to authority
+
+### 3. Flexible Vesting Schedules
+
+Three schedule types, configurable per campaign:
+
+| Type | How it works |
+|---|---|
+| **Cliff** | No tokens until cliff date, then full amount unlocks |
+| **Linear** | Tokens unlock proportionally over the vesting period |
+| **Milestone** | Tokens unlock at defined percentage checkpoints |
+
+### 4. Automatic Clawback
+
+If a campaign is cancelled, recipients keep all tokens that were already
+vested at the time of cancellation. The remaining unvested tokens return to
+the project authority after a 7-day grace period — giving recipients a final
+window to claim what they've earned.
+
+### Bonus: Per-Recipient Clawback (Root Rotation)
+
+Beyond full cancellation, `update_root` lets you revoke individual recipients
+by rotating the Merkle root. Kicked recipients' proofs stop working, while
+everyone else continues claiming normally — no need to cancel the entire
+campaign.
+
+---
+
+## Features Summary
 
 - **Merkle compression** — keccak256 leaf hashing, on-chain proof verification
 - **Customizable vesting** — cliff, linear, and milestone schedules
 - **Per-recipient clawback** — rotate the Merkle root to revoke individual allocations
 - **Campaign-wide cancel** — with 7-day grace period before unvested funds can be withdrawn
 - **Pause / unpause** — admin can freeze all claims
+- **Full transparency** — all state readable, all events emitted on-chain
 - **TS Merkle tooling** — `clients/ts/` with byte-equal Rust ↔ TS golden vector guarantee
 
 ## Instructions (10)
@@ -39,6 +101,85 @@ Full coverage including: `InvalidMerkleProof`, `AlreadyClaimed`, `NothingToClaim
 `CampaignPaused`, `CampaignCancelled`, `GracePeriodNotElapsed`, `SameRoot`,
 `InsufficientFunds`, `Unauthorized`, `IncorrectOwner`, and more.
 
+---
+
+## How to Use
+
+### For Project Teams (Admins)
+
+**1. Build your recipient list off-chain**
+
+```ts
+import { VestingMerkleTree } from './clients/ts';
+
+const tree = new VestingMerkleTree();
+tree.addLeaf({ recipient, amount, cliffEnd, vestingEnd, scheduleType });
+// ... add all recipients
+const root = tree.getRoot(); // 32-byte Merkle root
+```
+
+**2. Create a campaign**
+
+```ts
+await program.methods
+  .createCampaign(root, scheduleType, cliffEnd, vestingEnd, milestones)
+  .accounts({ authority: adminWallet })
+  .rpc();
+```
+
+**3. Fund it**
+
+```ts
+await program.methods
+  .fundCampaign(new BN(depositAmount))
+  .accounts({ authority: adminWallet, mint: tokenMint })
+  .rpc();
+```
+
+**4. Manage as needed**
+
+```ts
+// Pause all claims
+await program.methods.pauseCampaign().accounts({ authority: adminWallet }).rpc();
+
+// Cancel the campaign (7-day grace before withdrawal)
+await program.methods.cancelCampaign().accounts({ authority: adminWallet }).rpc();
+
+// Revoke a specific recipient (rotate root without their leaf)
+await program.methods.updateRoot(newRoot).accounts({ authority: adminWallet }).rpc();
+
+// Withdraw unvested tokens after grace period
+await program.methods.withdrawUnvested().accounts({ authority: adminWallet }).rpc();
+```
+
+### For Recipients
+
+**1. Get your proof from the project team**
+
+```ts
+const proof = tree.getProof(index); // Ask the project for your index + proof
+```
+
+**2. Claim your tokens**
+
+```ts
+await program.methods
+  .claim(proof, new BN(amount), new BN(cliffEnd), new BN(vestingEnd), scheduleType)
+  .accounts({ recipient: userWallet })
+  .rpc();
+```
+
+**3. Check your vested amount anytime**
+
+```ts
+const vested = await program.methods
+  .getVestedAmount(new BN(amount), new BN(cliffEnd), new BN(vestingEnd), scheduleType)
+  .accounts({ claimRecord: claimRecordPda })
+  .view();
+```
+
+---
+
 ## Test Results
 
 ```
@@ -61,7 +202,11 @@ The TypeScript `VestingLeaf` encoder in `clients/ts/leaf.ts` produces
 byte-identical output to the Rust `leaf_hash()` in `math/merkle.rs`.
 This is verified at test time — any mismatch fails CI.
 
-## Prerequisites
+---
+
+## Developer Setup
+
+### Prerequisites
 
 - **Rust** (stable):
   `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
@@ -75,30 +220,30 @@ This is verified at test time — any mismatch fails CI.
   ```
 - **Node** ≥ 22 + Yarn (or npm).
 
-## Setup
+### Build
 
-```
+```bash
 git clone https://github.com/ButlerRena/mancer-vesting.git
 cd mancer-vesting
 yarn install
 anchor build
 ```
 
-## Test
+### Run Tests
 
-```
+```bash
 anchor test
 ```
 
-Runs 8 integration tests against a local validator.
+### Deploy
 
-## Deploy to devnet
-
-```
+```bash
 solana config set --url https://api.devnet.solana.com
 solana airdrop 2
-anchor deploy --provider.cluster devnet
+anchor program deploy --provider.cluster devnet
 ```
+
+---
 
 ## Project Layout
 
