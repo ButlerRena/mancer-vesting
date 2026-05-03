@@ -20,36 +20,57 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Solana CLI + SBF toolchain
+      - name: Install Solana CLI 2.1.6
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.6/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-          # cargo-build-sbf needs platform-tools — download it explicitly
-          mkdir -p "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
-          PLATFORM_TOOLS_URL="https://github.com/anza-xyz/platform-tools/releases/latest/download/platform-tools-linux-x86_64.tar.bz2"
-          curl -L "$PLATFORM_TOOLS_URL" | tar xj -C "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools"
-          # Verify
-          "$HOME/.local/share/solana/install/active_release/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc" --version
+          # cargo-build-sbf calls fs::read_dir(~/.cache/solana).unwrap() at startup
+          # (find_installed_platform_tools, sdk/cargo-build-sbf/src/main.rs:146).
+          # On a fresh runner the dir doesn't exist yet, so it panics before it
+          # can download platform-tools. Create it empty.
+          mkdir -p "$HOME/.cache/solana"
+          # AnchorProvider.env() reads ~/.config/solana/id.json (per Anchor.toml).
+          # Generate a throwaway keypair for the test runner.
+          mkdir -p "$HOME/.config/solana"
+          "$HOME/.local/share/solana/install/active_release/bin/solana-keygen" new \
+            --no-bip39-passphrase --silent -o "$HOME/.config/solana/id.json"
 
-      - name: Install Anchor CLI
+      - name: Cache Solana platform tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/solana
+          key: solana-platform-tools-${{ runner.os }}-2.1.6
+
+      - name: Install Anchor CLI 1.0.0
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --force
           avm install 1.0.0
           avm use 1.0.0
+          anchor --version
+
+      - name: Install surfpool (Anchor 1.0 default test validator)
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/solana-foundation/surfpool/releases/latest/download/surfpool-linux-x64.tar.gz" \
+            | tar xz -C "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/surfpool"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          "$HOME/.local/bin/surfpool" --version
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "pnpm"
 
       - name: Install JS deps
-        run: |
-          npm config set registry https://registry.npmjs.org/
-          yarn config set registry https://registry.npmjs.org/ || true
-          yarn install --frozen-lockfile || npm install
+        run: pnpm install --frozen-lockfile
 
       - name: anchor build
         run: anchor build
 
       - name: anchor test
-        run: anchor test --skip-local-validator || anchor test
+        run: anchor test
